@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Contact {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  company      String?
+  customFields Json     @default("{}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  campaignContacts CampaignContact[]
+}
+
+model Sequence {
+  id        String         @id @default(cuid())
+  name      String
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  steps     SequenceStep[]
+  campaigns Campaign[]
+}
+
+model SequenceStep {
+  id         String   @id @default(cuid())
+  sequenceId String
+  stepNumber Int
+  subject    String
+  body       String   @db.Text
+  delayDays  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  sequence   Sequence   @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  emailLogs  EmailLog[]
+
+  @@unique([sequenceId, stepNumber])
+}
+
+model Campaign {
+  id         String         @id @default(cuid())
+  name       String
+  sequenceId String
+  status     CampaignStatus @default(DRAFT)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  sequence         Sequence          @relation(fields: [sequenceId], references: [id])
+  campaignContacts CampaignContact[]
+}
+
+model CampaignContact {
+  id          String                @id @default(cuid())
+  campaignId  String
+  contactId   String
+  status      CampaignContactStatus @default(PENDING)
+  currentStep Int                   @default(0)
+  nextSendAt  DateTime?
+  startedAt   DateTime?
+  repliedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  campaign  Campaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contact   Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  emailLogs EmailLog[]
+
+  @@unique([campaignId, contactId])
+  @@index([status, nextSendAt])
+}
+
+model EmailLog {
+  id                String      @id @default(cuid())
+  campaignContactId String
+  sequenceStepId    String
+  resendEmailId     String?     @unique
+  status            EmailStatus @default(SENT)
+  sentAt            DateTime    @default(now())
+  openedAt          DateTime?
+  clickedAt         DateTime?
+  bouncedAt         DateTime?
+
+  campaignContact CampaignContact @relation(fields: [campaignContactId], references: [id], onDelete: Cascade)
+  sequenceStep    SequenceStep    @relation(fields: [sequenceStepId], references: [id])
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+enum CampaignContactStatus {
+  PENDING
+  ACTIVE
+  REPLIED
+  BOUNCED
+  UNSUBSCRIBED
+  COMPLETED
+}
+
+enum EmailStatus {
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  BOUNCED
+  FAILED
+}
