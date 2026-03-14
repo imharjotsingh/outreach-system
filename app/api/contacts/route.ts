@@ -43,7 +43,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid payload: send { contacts: [...] }' }, { status: 400 })
   }
 
-  const normalized = contacts.map((c: { name?: string; email?: string; company?: string; customFields?: Record<string, string> }) => ({
+  type ContactInput = { name?: string; email?: string; company?: string; customFields?: Record<string, string> }
+  const normalized = (contacts as ContactInput[]).map((c) => ({
     email: typeof c.email === 'string' ? c.email.trim().toLowerCase() : '',
     name: typeof c.name === 'string' ? c.name.trim() || 'Contact' : 'Contact',
     company: typeof c.company === 'string' ? c.company.trim() || undefined : undefined,
