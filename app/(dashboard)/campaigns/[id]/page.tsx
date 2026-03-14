@@ -60,7 +60,11 @@ export default function CampaignDetailPage() {
   function load() {
     fetch(`/api/campaigns/${id}`)
       .then((r) => r.json())
-      .then(setCampaign)
+      .then((data) => {
+        if (data?.id) setCampaign(data)
+        else setCampaign(null)
+      })
+      .catch(() => setCampaign(null))
   }
 
   useEffect(() => { load() }, [id]) // eslint-disable-line
@@ -68,7 +72,7 @@ export default function CampaignDetailPage() {
   async function loadContacts() {
     const res = await fetch('/api/contacts?limit=1000')
     const data = await res.json()
-    setAllContacts(data.contacts)
+    setAllContacts(Array.isArray(data?.contacts) ? data.contacts : [])
     setShowAddContacts(true)
   }
 

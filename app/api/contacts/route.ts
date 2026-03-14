@@ -31,37 +31,55 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json()
-  const { contacts } = body as {
-    contacts: { name: string; email: string; company?: string; customFields?: Record<string, string> }[]
+  let body: { contacts?: unknown[] }
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
+  const { contacts } = body
 
   if (!contacts || !Array.isArray(contacts)) {
-    return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
+    return NextResponse.json({ error: 'Invalid payload: send { contacts: [...] }' }, { status: 400 })
   }
 
-  // Upsert contacts (update if email exists)
-  const results = await Promise.allSettled(
-    contacts.map((c) =>
-      prisma.contact.upsert({
-        where: { email: c.email },
-        update: {
-          name: c.name,
-          company: c.company,
-          customFields: c.customFields || {},
-        },
-        create: {
-          email: c.email,
-          name: c.name,
-          company: c.company,
-          customFields: c.customFields || {},
-        },
-      })
+  const normalized = contacts.map((c: { name?: string; email?: string; company?: string; customFields?: Record<string, string> }) => ({
+    email: typeof c.email === 'string' ? c.email.trim().toLowerCase() : '',
+    name: typeof c.name === 'string' ? c.name.trim() || 'Contact' : 'Contact',
+    company: typeof c.company === 'string' ? c.company.trim() || undefined : undefined,
+    customFields: c.customFields && typeof c.customFields === 'object' ? c.customFields : {},
+  })).filter((c) => c.email.length > 0)
+
+  if (normalized.length === 0) {
+    return NextResponse.json({ error: 'No valid contacts (need at least one with email)' }, { status: 400 })
+  }
+
+  try {
+    const results = await Promise.allSettled(
+      normalized.map((c) =>
+        prisma.contact.upsert({
+          where: { email: c.email },
+          update: {
+            name: c.name,
+            company: c.company,
+            customFields: c.customFields,
+          },
+          create: {
+            email: c.email,
+            name: c.name,
+            company: c.company,
+            customFields: c.customFields,
+          },
+        })
+      )
     )
-  )
 
-  const succeeded = results.filter((r) => r.status === 'fulfilled').length
-  const failed = results.filter((r) => r.status === 'rejected').length
+    const succeeded = results.filter((r) => r.status === 'fulfilled').length
+    const failed = results.filter((r) => r.status === 'rejected').length
 
-  return NextResponse.json({ imported: succeeded, failed })
+    return NextResponse.json({ imported: succeeded, failed })
+  } catch (e) {
+    console.error('Contacts import error:', e)
+    return NextResponse.json({ error: 'Database error while importing contacts' }, { status: 500 })
+  }
 }

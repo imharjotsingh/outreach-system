@@ -21,7 +21,8 @@ export default function SequencesPage() {
   function load() {
     fetch('/api/sequences')
       .then((r) => r.json())
-      .then(setSequences)
+      .then((data) => setSequences(Array.isArray(data) ? data : []))
+      .catch(() => setSequences([]))
       .finally(() => setLoading(false))
   }
 
@@ -29,15 +30,21 @@ export default function SequencesPage() {
 
   async function create() {
     if (!newName.trim()) return
+    setCreating(true)
     const res = await fetch('/api/sequences', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: newName.trim() }),
     })
-    const seq = await res.json()
+    const data = await res.json()
+    if (!res.ok) {
+      alert(data?.error || `Failed to create sequence (${res.status})`)
+      setCreating(false)
+      return
+    }
     setNewName('')
     setCreating(false)
-    window.location.href = `/sequences/${seq.id}`
+    window.location.href = `/sequences/${data.id}`
   }
 
   async function del(id: string) {

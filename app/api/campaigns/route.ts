@@ -28,16 +28,27 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { name, sequenceId } = await req.json()
+  let body: { name?: string; sequenceId?: string }
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+  const { name, sequenceId } = body
 
-  if (!name || !sequenceId) {
+  if (!name || typeof name !== 'string' || !name.trim() || !sequenceId || typeof sequenceId !== 'string') {
     return NextResponse.json({ error: 'name and sequenceId required' }, { status: 400 })
   }
 
-  const campaign = await prisma.campaign.create({
-    data: { name, sequenceId },
-    include: { sequence: { include: { steps: true } } },
-  })
+  try {
+    const campaign = await prisma.campaign.create({
+      data: { name: name.trim(), sequenceId },
+      include: { sequence: { include: { steps: true } } },
+    })
 
-  return NextResponse.json(campaign)
+    return NextResponse.json(campaign)
+  } catch (e) {
+    console.error('Campaign create error:', e)
+    return NextResponse.json({ error: 'Failed to create campaign. Check that the sequence exists.' }, { status: 500 })
+  }
 }

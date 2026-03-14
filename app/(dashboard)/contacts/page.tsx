@@ -35,6 +35,7 @@ export default function ContactsPage() {
   const [fieldMap, setFieldMap] = useState<FieldMap>({})
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  const [importError, setImportError] = useState<string | null>(null)
   const [showImport, setShowImport] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -45,8 +46,12 @@ export default function ContactsPage() {
     fetch(`/api/contacts?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`)
       .then((r) => r.json())
       .then((d) => {
-        setContacts(d.contacts)
-        setTotal(d.total)
+        setContacts(Array.isArray(d?.contacts) ? d.contacts : [])
+        setTotal(typeof d?.total === 'number' ? d.total : 0)
+      })
+      .catch(() => {
+        setContacts([])
+        setTotal(0)
       })
       .finally(() => setLoading(false))
   }
@@ -74,6 +79,7 @@ export default function ContactsPage() {
         setFieldMap(autoMap)
         setShowImport(true)
         setImportResult(null)
+        setImportError(null)
       },
     })
     e.target.value = ''
@@ -100,10 +106,11 @@ export default function ContactsPage() {
             if (row[h]) customFields[fieldMap[h] || h] = row[h]
           }
         })
+        const name = (nameCol ? row[nameCol]?.trim() : (emailCol ? row[emailCol].split('@')[0] : '')) || 'Contact'
         return {
-          email: emailCol ? row[emailCol] : '',
-          name: nameCol ? row[nameCol] : (emailCol ? row[emailCol].split('@')[0] : ''),
-          company: companyCol ? row[companyCol] : undefined,
+          email: (emailCol ? row[emailCol] : '').trim().toLowerCase(),
+          name,
+          company: companyCol ? row[companyCol]?.trim() || undefined : undefined,
           customFields,
         }
       })
@@ -114,8 +121,14 @@ export default function ContactsPage() {
       body: JSON.stringify({ contacts }),
     })
     const result = await res.json()
-    setImportResult(result)
     setImporting(false)
+    if (!res.ok) {
+      setImportError(result?.error || `Import failed (${res.status})`)
+      setImportResult(null)
+      return
+    }
+    setImportError(null)
+    setImportResult({ imported: result.imported ?? 0, failed: result.failed ?? 0 })
     load()
   }
 
@@ -173,7 +186,12 @@ export default function ContactsPage() {
             ))}
           </div>
 
-          {importResult ? (
+          {importError ? (
+            <div className="flex items-center gap-3 p-3 bg-red-50 rounded-lg">
+              <AlertCircle className="h-5 w-5 text-red-600" />
+              <span className="text-sm text-red-700">{importError}</span>
+            </div>
+          ) : importResult ? (
             <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
               <CheckCircle className="h-5 w-5 text-green-600" />
               <span className="text-sm text-green-700">
@@ -246,7 +264,7 @@ export default function ContactsPage() {
                   <td className="px-4 py-3 text-gray-600">{c.email}</td>
                   <td className="px-4 py-3 text-gray-600">{c.company || '—'}</td>
                   <td className="px-4 py-3 text-gray-400 text-xs">
-                    {Object.keys(c.customFields).length > 0
+                    {c.customFields && typeof c.customFields === 'object' && Object.keys(c.customFields).length > 0
                       ? Object.keys(c.customFields).join(', ')
                       : '—'}
                   </td>

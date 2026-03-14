@@ -39,8 +39,11 @@ export default function CampaignsPage() {
       fetch('/api/campaigns').then((r) => r.json()),
       fetch('/api/sequences').then((r) => r.json()),
     ]).then(([camps, seqs]) => {
-      setCampaigns(camps)
-      setSequences(seqs)
+      setCampaigns(Array.isArray(camps) ? camps : [])
+      setSequences(Array.isArray(seqs) ? seqs : [])
+    }).catch(() => {
+      setCampaigns([])
+      setSequences([])
     }).finally(() => setLoading(false))
   }
 
@@ -53,11 +56,15 @@ export default function CampaignsPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: newName.trim(), sequenceId: newSeqId }),
     })
-    const camp = await res.json()
+    const data = await res.json()
+    if (!res.ok) {
+      alert(data?.error || `Failed to create campaign (${res.status})`)
+      return
+    }
     setNewName('')
     setNewSeqId('')
     setCreating(false)
-    window.location.href = `/campaigns/${camp.id}`
+    window.location.href = `/campaigns/${data.id}`
   }
 
   return (
